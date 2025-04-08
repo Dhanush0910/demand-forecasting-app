@@ -1,0 +1,19 @@
+# python
+__pycache__/
+*.pyc
+instance/
+.env
+
+# flask
+*.db
+*.sqlite3
+
+# vscode
+.vscode/
+
+# node or frontend
+node_modules/
+dist/
+
+# virtual environment
+venv/

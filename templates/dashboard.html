@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+
+    <!-- chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- chartjs plugin for zoom -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+
+    <!-- load styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <!-- load main js -->
+    <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+</head>
+<body class="dashboard-page">
+    <!-- app title -->
+    <div class="app-title">Sales Forecast Dashboard</div>
+
+    <!-- glassmorphic container -->
+    <div class="glass-container">
+        <!-- left side - controls -->
+        <div class="left-panel">
+            <h2 class="dashboard-title">Forecast Sales</h2>
+
+            <!-- model selection -->
+            <label for="modelSelect">Select Model:</label>
+            <select id="modelSelect">
+                <option value="lstm">LSTM</option>
+                <option value="arima">ARIMA</option>
+                <option value="prophet">Prophet</option>
+            </select>
+
+            <!-- forecast days input -->
+            <label for="daysInput">Days to Forecast:</label>
+            <input type="number" id="daysInput" value="7" min="1">
+
+            <!-- predict button -->
+            <button id="predictBtn">Predict</button>
+
+            <!-- logout -->
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+
+        <!-- right side - chart -->
+        <div class="chart-container">
+            <canvas id="forecastChart"></canvas>
+        </div>
+    </div>
+</body>
+</html>
