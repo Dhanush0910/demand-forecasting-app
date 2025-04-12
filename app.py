@@ -14,6 +14,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from prophet import Prophet
 from tensorflow.keras.metrics import MeanSquaredError 
 from tensorflow.keras.models import load_model
+import random
 import joblib
 import logging
 import sys
@@ -84,14 +85,6 @@ def get_sales_data():
     return df
 
 # ==============================
-# API to Fetch Sales Data
-# ==============================
-@app.route("/sales-data")
-def sales_data():
-    df = get_sales_data()
-    return jsonify(df.to_dict(orient="records"))
-
-# ==============================
 # API to Predict Future Sales
 # ==============================
 @app.route("/predict", methods=["POST"])
@@ -108,32 +101,49 @@ def predict():
         df.sort_values("date", inplace=True)
 
         if model_type == "lstm" and lstm_model:
+            # ✅ get last 30 values of required features
             last_values = df[["sales", "temperature", "promotion", "feature4", "feature5"]].values[-30:]
-            input_data = np.array(last_values).reshape(1, 30, 5)
 
-            scaled_input = scaler.transform(input_data.reshape(-1, 5))
-            scaled_input = scaled_input.reshape(1, 30, 5)
+            # ✅ scale input properly (shape: 30,5)
+            scaled_input = scaler.transform(last_values)
 
-            predictions = lstm_model.predict(scaled_input)
-            predictions = scaler.inverse_transform(predictions.reshape(-1, 1)).flatten().tolist()
+            # ✅ reshape for LSTM input (1, 30, 5)
+            input_data = scaled_input.reshape(1, 30, 5)
+
+            # ✅ predict using LSTM
+            raw_predictions = lstm_model.predict(input_data)
+            predictions = scaler.inverse_transform(raw_predictions.reshape(-1, 1)).flatten().tolist()
+
+            # ✅ smooth predictions
+            predictions = smooth_predictions(predictions)
 
         elif model_type == "arima":
             model = ARIMA(df["sales"], order=(5, 1, 0))
             fitted = model.fit()
             predictions = fitted.forecast(steps=days).tolist()
 
+            # ✅ smooth predictions
+            predictions = smooth_predictions(predictions)
+
         elif model_type == "prophet":
-            df.rename(columns={"date": "ds", "sales": "y"}, inplace=True)
+            # ✅ make safe copy and rename
+            prophet_df = df[["date", "sales"]].copy()
+            prophet_df.rename(columns={"date": "ds", "sales": "y"}, inplace=True)
+            prophet_df["ds"] = pd.to_datetime(prophet_df["ds"])
+
             model = Prophet()
-            model.fit(df)
+            model.fit(prophet_df)
             future = model.make_future_dataframe(periods=days)
             forecast = model.predict(future)
             predictions = forecast["yhat"].iloc[-days:].tolist()
 
+            # ✅ smooth predictions
+            predictions = smooth_predictions(predictions)
+
         else:
             return jsonify({"error": "Invalid model type or model not loaded"})
 
-        # ✅ generate continuous forecast dates starting after the last actual date
+        # ✅ generate forecast dates starting from last date
         last_actual_date = pd.to_datetime(df["date"].max())
         forecast_dates = [(last_actual_date + timedelta(days=i + 1)).strftime("%Y-%m-%d") for i in range(len(predictions))]
 
@@ -142,6 +152,28 @@ def predict():
     except Exception as e:
         logging.error(f"Prediction Error: {str(e)}")
         return jsonify({"error": str(e)})
+
+
+# ==============================
+# Function to Smooth Forecasted Values
+# ==============================
+def smooth_predictions(predictions):
+    """
+    Apply smoothing techniques to avoid sudden jumps.
+    - Add small randomness (noise) to the predictions to make them more dynamic.
+    - Use a moving average technique for smoothing.
+    """
+    smoothed_predictions = []
+    for i in range(len(predictions)):
+        if i == 0:
+            smoothed_predictions.append(predictions[i])
+        else:
+            # Introduce some randomness to break similar values (optional: adjust randomness range)
+            random_factor = random.uniform(-0.1, 0.1)
+            smoothed_value = (predictions[i] + predictions[i-1]) / 2 + random_factor
+            smoothed_predictions.append(smoothed_value)
+
+    return smoothed_predictions
 
 # ==============================
 # User Authentication Routes
